@@ -12,6 +12,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from data_loaders import load_data
 
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,20 @@ def main():
     if not validate_input(args.input):
         sys.exit(1)
 
+    try:
+        data = load_data(args.input)
+    except ValueError:
+        sys.exit(1)
+
+    # Process the data (this is where your data processing logic will go)
+
+    logger.info(f"Data processing complete. Outputting results to {args.output}")
+
+    if args.format == "csv":
+        data.to_csv(args.output, index=False)
+    elif args.format == "json":
+        data.to_json(args.output, orient="records", lines=True)
+    
 
 if __name__ == "__main__":
     main()
