@@ -1,40 +1,31 @@
 """
-Data Processing Pipeline - CLI Template
-
-DS 3500 - MP1
+Data Processing Pipeline - CLI
 
 Usage:
-    python pipeline.py --input fixtures/sample.csv --output cleaned_data.csv --config config.yaml --verbose
+    python pipeline.py --input fixtures/sample_data.csv \
+        --output output/clean.csv \
+        --config config/config.yaml --verbose
 """
 
 import argparse
 import logging
 import sys
-from pathlib import Path
-from data_loaders import load_data
-from data_processor import process_data, create_cleaning_report
+
+from src import (
+    create_cleaning_report,
+    load_data,
+    process_data,
+    save_data,
+    setup_logging,
+    validate_dataframe,
+    validate_input,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def setup_logging(verbose=False):
-    """Configure logging for the pipeline."""
-
-    if verbose:
-        level = logging.DEBUG
-    else:
-        level = logging.INFO
-
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
-        datefmt="%H:%M:%S"
-    )
-
-
 def parse_arguments():
     """Parse command-line arguments."""
-
     parser = argparse.ArgumentParser(
         description="Data Processing Pipeline"
     )
@@ -43,52 +34,39 @@ def parse_arguments():
         "--input",
         "-i",
         required=True,
-        help="Path to the input file"
+        help="Path to the input file",
     )
-
     parser.add_argument(
-    "--config",
-    required=True,
-    help="Path to a YAML configuration file"
+        "--config",
+        required=True,
+        help="Path to a YAML configuration file",
     )
-
     parser.add_argument(
         "--output",
         "-o",
         required=True,
-        help="Path to the output file"
+        help="Path to the output file",
     )
-
     parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
-        help="Enable verbose logging"
+        help="Enable verbose logging",
     )
 
     return parser.parse_args()
 
 
-def validate_input(filepath):
-    """Check whether the input path exists and is a file."""
-
-    if Path(filepath).is_file():
-        logger.info(f"Input file validated: {filepath}")
-        return True
-    else:
-        logger.error(f"Input file not found: {filepath}")
-        return False
-
-
 def main():
-    """Main pipeline function."""
+    """Run the complete data processing pipeline."""
     args = parse_arguments()
-
     setup_logging(args.verbose)
 
     logger.debug(
-        f"Arguments parsed: input={args.input}, "
-        f"output={args.output}, config={args.config}"
+        "Arguments parsed: input=%s, output=%s, config=%s",
+        args.input,
+        args.output,
+        args.config,
     )
 
     if not validate_input(args.input):
@@ -104,6 +82,24 @@ def main():
         logger.error("Could not load input or config: %s", error)
         sys.exit(1)
 
+    validation_config = config.get("validation", {})
+    required_columns = validation_config.get("required_columns", [])
+    numeric_columns = validation_config.get("numeric_columns", [])
+
+    rows_before_validation = len(data)
+
+    try:
+        data = validate_dataframe(data, required_columns, numeric_columns)
+    except ValueError as error:
+        logger.error("Could not validate data: %s", error)
+        sys.exit(1)
+
+    logger.info(
+        "Validation complete: %s -> %s rows",
+        rows_before_validation,
+        len(data),
+    )
+
     df_before = data.copy()
 
     try:
@@ -115,16 +111,17 @@ def main():
     report = create_cleaning_report(df_before, data)
 
     logger.info(
-        "Processing complete: %s → %s rows",
+        "Processing complete: %s -> %s rows",
         len(df_before),
         len(data),
     )
 
-    data.to_csv(args.output, index=False)
+    save_data(data, args.output)
     logger.info("Saved cleaned data to %s", args.output)
 
+    print("Cleaning report:")
     print(report)
-    
+
 
 if __name__ == "__main__":
     main()
